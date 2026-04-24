@@ -23,7 +23,7 @@ import lombok.Data;
 
 /**
  * 用户返回参数响应
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *
  */
 @Data
 public class UserRespDTO {
@@ -46,6 +46,7 @@ public class UserRespDTO {
     /**
      * 手机号
      */
+    // 指定某个字段在序列化成 JSON 时使用自定义的序列化规则。
     @JsonSerialize(using = PhoneDesensitizationSerializer.class)
     private String phone;
 

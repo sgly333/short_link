@@ -25,7 +25,8 @@ import lombok.NoArgsConstructor;
 
 /**
  * 短链接跳转实体
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ * 短链接路由表 根据gid 路由到相应的分表中
+ *
  */
 @Data
 @Builder

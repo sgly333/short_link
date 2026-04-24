@@ -24,7 +24,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * 布隆过滤器配置
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *
  */
 @Configuration(value = "rBloomFilterConfigurationByAdmin")
 public class RBloomFilterConfiguration {
@@ -33,6 +33,7 @@ public class RBloomFilterConfiguration {
      * 防止用户注册查询数据库的布隆过滤器
      */
     @Bean
+    //  这个方法返回的对象会被 Spring 容器管理为一个 Bean 这个 Bean的默认名字就是：方法名
     public RBloomFilter<String> userRegisterCachePenetrationBloomFilter(RedissonClient redissonClient) {
         RBloomFilter<String> cachePenetrationBloomFilter = redissonClient.getBloomFilter("userRegisterCachePenetrationBloomFilter");
         cachePenetrationBloomFilter.tryInit(100000000L, 0.001);

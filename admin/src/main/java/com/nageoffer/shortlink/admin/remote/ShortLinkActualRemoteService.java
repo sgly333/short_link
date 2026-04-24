@@ -42,13 +42,17 @@ import java.util.List;
 
 /**
  * 短链接中台远程调用服务
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *  
  */
+// @FeignClient 用来声明一个远程服务调用接口，
+//Spring 会自动生成代理对象，通过 HTTP 调用远程服务。
 @FeignClient(
         value = "short-link-project",
         url = "${aggregation.remote-url:}",
         configuration = OpenFeignConfiguration.class
 )
+//value = "short-link-project"：表示“发请求给名为 short-link-project 的服务”（通过 Nacos 解析成具体 IP:端口）。
+//每个方法上的 @GetMapping("...") / @PostMapping("...") 就是要调用的 URL 路径。
 public interface ShortLinkActualRemoteService {
 
     /**

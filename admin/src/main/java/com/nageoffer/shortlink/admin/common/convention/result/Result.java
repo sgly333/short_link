@@ -25,13 +25,16 @@ import java.io.Serializable;
 
 /**
  * 全局返回对象
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *  
  */
 @Data
+// @Accessors(chain = true) 让 setter 方法支持链式调用（chain call
 @Accessors(chain = true)
 public class Result<T> implements Serializable {
 
     @Serial
+    // 标记序列化相关成员
+    // serialVersionUID 的作用 标识类的序列化版本， 保证反序列化时类的兼容性， 避免类修改导致反序列化失败。
     private static final long serialVersionUID = 5679018624309023727L;
 
     /**

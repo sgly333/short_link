@@ -25,7 +25,7 @@ import java.util.Date;
 
 /**
  * 数据库持久层对象基础属性
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *
  */
 @Data
 public class BaseDO {
@@ -33,6 +33,7 @@ public class BaseDO {
     /**
      * 创建时间
      */
+    // MyBatis-Plus 的字段填充注解，作用是：在执行数据库 INSERT 操作时，自动给该字段填充值。
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 

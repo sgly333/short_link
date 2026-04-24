@@ -19,11 +19,12 @@ package com.nageoffer.shortlink.admin.common.biz.user;
 
 import com.alibaba.ttl.TransmittableThreadLocal;
 
+import java.util.ArrayList;
 import java.util.Optional;
 
 /**
  * 用户上下文
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *  
  */
 public final class UserContext {
 
@@ -48,7 +49,9 @@ public final class UserContext {
      */
     public static String getUserId() {
         UserInfoDTO userInfoDTO = USER_THREAD_LOCAL.get();
+        // 链式编程  判断获取到的userInfoDTO 是否为空
         return Optional.ofNullable(userInfoDTO).map(UserInfoDTO::getUserId).orElse(null);
+
     }
 
     /**

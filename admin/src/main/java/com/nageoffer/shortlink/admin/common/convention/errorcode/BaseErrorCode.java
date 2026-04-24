@@ -19,7 +19,7 @@ package com.nageoffer.shortlink.admin.common.convention.errorcode;
 
 /**
  * 基础错误码定义
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *
  */
 public enum BaseErrorCode implements IErrorCode {
 
@@ -51,10 +51,11 @@ public enum BaseErrorCode implements IErrorCode {
     // ========== 一级宏观错误码 调用第三方服务出错 ==========
     REMOTE_ERROR("C000001", "调用第三方服务出错");
 
+    // 枚举中有两个属性
     private final String code;
 
     private final String message;
-
+    // 枚举的构造方法用于给每个枚举常量初始化属性值。
     BaseErrorCode(String code, String message) {
         this.code = code;
         this.message = message;

@@ -44,26 +44,30 @@ import static com.nageoffer.shortlink.admin.common.convention.errorcode.BaseErro
 
 /**
  * 用户操作流量风控过滤器
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *  
  */
 @Slf4j
 @RequiredArgsConstructor
+
 public class UserFlowRiskControlFilter implements Filter {
 
     private final StringRedisTemplate stringRedisTemplate;
     private final UserFlowRiskControlConfiguration userFlowRiskControlConfiguration;
-
+    // 所使用的 Lua脚本的地址
     private static final String USER_FLOW_RISK_CONTROL_LUA_SCRIPT_PATH = "lua/user_flow_risk_control.lua";
 
     @SneakyThrows
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain filterChain) throws IOException, ServletException {
+        // 创建一个redis脚本 并声明 (1) 到哪里加载 Lua 脚本 (2) 脚本返回值类型是 Long
         DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
         redisScript.setScriptSource(new ResourceScriptSource(new ClassPathResource(USER_FLOW_RISK_CONTROL_LUA_SCRIPT_PATH)));
         redisScript.setResultType(Long.class);
         String username = Optional.ofNullable(UserContext.getUsername()).orElse("other");
         Long result;
         try {
+            // 执行redis+脚本 返回当前用户在这个时间窗口内的 访问次数
+            // Lua 脚本里会用这个用户名作为 Redis key 的一部分
             result = stringRedisTemplate.execute(redisScript, Lists.newArrayList(username), userFlowRiskControlConfiguration.getTimeWindow());
         } catch (Throwable ex) {
             log.error("执行用户请求流量限制LUA脚本出错", ex);

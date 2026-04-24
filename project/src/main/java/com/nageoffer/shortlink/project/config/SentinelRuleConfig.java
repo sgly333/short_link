@@ -21,6 +21,7 @@ import com.alibaba.csp.sentinel.slots.block.RuleConstant;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRuleManager;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -28,17 +29,22 @@ import java.util.List;
 
 /**
  * 初始化限流配置
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *
  */
 @Component
+// implements InitializingBean
+// Spring 提供的 初始化回调接口 Bean 创建完成后会自动执行：afterPropertiesSet()
 public class SentinelRuleConfig implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() throws Exception {
         List<FlowRule> rules = new ArrayList<>();
         FlowRule createOrderRule = new FlowRule();
+        // 设置资源的名称  这个资源就是短链接的create方法
         createOrderRule.setResource("create_short-link");
+        // 按照 QPS 限流
         createOrderRule.setGrade(RuleConstant.FLOW_GRADE_QPS);
+        // 设置 QPS = 1 也就是每秒最多 1 次请求
         createOrderRule.setCount(1);
         rules.add(createOrderRule);
         FlowRuleManager.loadRules(rules);

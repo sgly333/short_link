@@ -35,6 +35,7 @@ public class UserTableShardingTest {
             ") ENGINE=InnoDB AUTO_INCREMENT=1715030926162935810 DEFAULT CHARSET=utf8mb4;";
 
     public static void main(String[] args) {
+
         for (int i = 0; i < 16; i++) {
             System.out.printf((SQL) + "%n", i);
         }

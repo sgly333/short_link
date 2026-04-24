@@ -26,8 +26,9 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * 数据库持久层配置类
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *
  */
+// @Configuration 表示这个类是一个 Spring 配置类，用来定义 Bean  配置类本身也要放入IOC容器中 也是bean value值代表bean的名称
 @Configuration(value = "dataBaseConfigurationByAdmin")
 public class DataBaseConfiguration {
 

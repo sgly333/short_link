@@ -1,0 +1,31 @@
+# 控制台前端：Nginx 托管 console-vue 的 dist，/api 转发到网关
+#
+# 前置：已启动 docker-compose.infra.yml 与 docker-compose.runtime.yml（同一网络 shortlink-net）
+#
+# 本地构建：
+#   cd console-vue && npm install && npm run build
+# 将生成的 dist 目录整体复制到与 compose 同级，例如 shortlink/dist/
+#
+# 启动（在含 dist、nginx 配置的目录）：
+#   docker compose -f docker-compose.frontend.yml up -d
+
+services:
+  shortlink-nginx:
+    image: nginx:1.25-alpine
+    container_name: shortlink-nginx
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      
+    volumes:
+      - ./dist:/usr/share/nginx/html:ro
+      - ./default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - shortlink-net
+    restart: unless-stopped
+
+networks:
+  shortlink-net:
+    external: true
+    name: shortlink-net

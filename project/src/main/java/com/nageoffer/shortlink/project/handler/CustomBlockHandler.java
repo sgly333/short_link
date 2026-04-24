@@ -24,10 +24,11 @@ import com.nageoffer.shortlink.project.dto.resp.ShortLinkCreateRespDTO;
 
 /**
  * 自定义流控策略
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *
  */
 public class CustomBlockHandler {
 
+    // blockHandler 方法签名规则 参数列表要和原方法(被限流的方法)一致（加一个 BlockException）
     public static Result<ShortLinkCreateRespDTO> createShortLinkBlockHandlerMethod(ShortLinkCreateReqDTO requestParam, BlockException exception) {
         return new Result<ShortLinkCreateRespDTO>().setCode("B100000").setMessage("当前访问网站人数过多，请稍后再试...");
     }

@@ -56,7 +56,7 @@ import static com.nageoffer.shortlink.admin.common.constant.RedisCacheConstant.L
 
 /**
  * 短链接分组接口实现层
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *
  */
 @Slf4j
 @Service
@@ -81,6 +81,7 @@ public class GroupServiceImpl extends ServiceImpl<GroupMapper, GroupDO> implemen
         RLock lock = redissonClient.getLock(String.format(LOCK_GROUP_CREATE_KEY, username));
         lock.lock();
         try {
+            // 查看该用户创建了多少个 group  group可以重名 按(gid,username)作为唯一标识
             LambdaQueryWrapper<GroupDO> queryWrapper = Wrappers.lambdaQuery(GroupDO.class)
                     .eq(GroupDO::getUsername, username)
                     .eq(GroupDO::getDelFlag, 0);
@@ -91,6 +92,7 @@ public class GroupServiceImpl extends ServiceImpl<GroupMapper, GroupDO> implemen
             int retryCount = 0;
             int maxRetries = 10;
             String gid = null;
+            // 防止生成 gid 时发生冲突或异常导致死循环，同时给系统一个有限次数的重试机会。
             while (retryCount < maxRetries) {
                 gid = saveGroupUniqueReturnGid();
                 if (StrUtil.isNotEmpty(gid)) {
@@ -114,6 +116,11 @@ public class GroupServiceImpl extends ServiceImpl<GroupMapper, GroupDO> implemen
         }
     }
 
+    /**
+     * 查询用户短链接分组集合
+     *
+     * @return 用户短链接分组集合
+     */
     @Override
     public List<ShortLinkGroupRespDTO> listGroup() {
         LambdaQueryWrapper<GroupDO> queryWrapper = Wrappers.lambdaQuery(GroupDO.class)
@@ -121,10 +128,15 @@ public class GroupServiceImpl extends ServiceImpl<GroupMapper, GroupDO> implemen
                 .eq(GroupDO::getUsername, UserContext.getUsername())
                 .orderByDesc(GroupDO::getSortOrder, GroupDO::getUpdateTime);
         List<GroupDO> groupDOList = baseMapper.selectList(queryWrapper);
+
+        // 获取当前用户的每个分组中包含的短链接的数量
         Result<List<ShortLinkGroupCountQueryRespDTO>> listResult = shortLinkActualRemoteService
                 .listGroupShortLinkCount(groupDOList.stream().map(GroupDO::getGid).toList());
+
         List<ShortLinkGroupRespDTO> shortLinkGroupRespDTOList = BeanUtil.copyToList(groupDOList, ShortLinkGroupRespDTO.class);
+        // 下面的作用就是从Result中解析相同gid中的短链接数量 然后放入 shortLinkGroupRespDTOList中
         shortLinkGroupRespDTOList.forEach(each -> {
+            // Optional 是 Java 8 引入的一个容器类（java.util.Optional），用于表示： 一个值可能存在，也可能不存在（避免直接使用 null）
             Optional<ShortLinkGroupCountQueryRespDTO> first = listResult.getData().stream()
                     .filter(item -> Objects.equals(item.getGid(), each.getGid()))
                     .findFirst();
@@ -133,6 +145,7 @@ public class GroupServiceImpl extends ServiceImpl<GroupMapper, GroupDO> implemen
         return shortLinkGroupRespDTOList;
     }
 
+    // 更新组 但只能修改组名
     @Override
     public void updateGroup(ShortLinkGroupUpdateReqDTO requestParam) {
         LambdaUpdateWrapper<GroupDO> updateWrapper = Wrappers.lambdaUpdate(GroupDO.class)

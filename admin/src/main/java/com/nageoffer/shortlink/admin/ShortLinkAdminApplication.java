@@ -25,12 +25,16 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 
 /**
  * 短链接后管应用
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *  
  */
 @SpringBootApplication
+// @EnableDiscoveryClient让当前服务可以注册到注册中心，并且可以发现其他服务。
 @EnableDiscoveryClient
+// @EnableFeignClients 开启 Feign 客户端功能，并扫描指定包中的 Feign 接口，让 Spring 自动生成远程调用代理。
 @EnableFeignClients("com.nageoffer.shortlink.admin.remote")
+// 在启动类中 让 Spring 自动扫描指定包下的 MyBatis Mapper 接口，并把它们注册为 Bean。
 @MapperScan("com.nageoffer.shortlink.admin.dao.mapper")
+
 public class ShortLinkAdminApplication {
 
     public static void main(String[] args) {

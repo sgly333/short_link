@@ -40,16 +40,19 @@ import java.util.Optional;
 
 /**
  * 全局异常处理器
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *
  */
+//@component注解 把一个类标记为 Spring 管理的组件（Bean），让 Spring 自动创建并管理这个对象。
 @Component("globalExceptionHandlerByAdmin")
 @Slf4j
+// @RestControllerAdvice 用来标记一个类作为 全局异常处理类（全局 Controller 增强类），其中通过 @ExceptionHandler 标记的方法可以处理指定类型的异常。
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     /**
      * 拦截参数验证异常
      */
+    // @SneakyThrows 在方法中自动抛出受检异常（checked exception），而不需要写 throws 或 try-catch。
     @SneakyThrows
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
     public Result validExceptionHandler(HttpServletRequest request, MethodArgumentNotValidException ex) {
@@ -68,6 +71,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = {AbstractException.class})
     public Result abstractException(HttpServletRequest request, AbstractException ex) {
         if (ex.getCause() != null) {
+            // {}代表一个占位符 如果最后一个参数是 Throwable，即使没有对应的 {} 占位符，日志框架也会把它当作异常堆栈打印。
             log.error("[{}] {} [ex] {}", request.getMethod(), request.getRequestURL().toString(), ex.toString(), ex.getCause());
             return Results.failure(ex);
         }

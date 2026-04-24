@@ -24,7 +24,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * 布隆过滤器配置
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *
  */
 @Configuration
 public class RBloomFilterConfiguration {
@@ -35,6 +35,7 @@ public class RBloomFilterConfiguration {
     @Bean
     public RBloomFilter<String> shortUriCreateCachePenetrationBloomFilter(RedissonClient redissonClient) {
         RBloomFilter<String> cachePenetrationBloomFilter = redissonClient.getBloomFilter("shortUriCreateCachePenetrationBloomFilter");
+                                            // 代表 预计存储的元素数量  n   代表 期望的误判率 p
         cachePenetrationBloomFilter.tryInit(100000000L, 0.001);
         return cachePenetrationBloomFilter;
     }

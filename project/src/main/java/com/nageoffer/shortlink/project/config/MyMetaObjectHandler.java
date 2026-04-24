@@ -25,9 +25,11 @@ import java.util.Date;
 
 /**
  * MyBatis-Plus 原数据自动填充类
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *  
  */
 @Component
+// @TableField(fill = FieldFill.INSERT) 表示该字段在执行 INSERT 操作时由 MyBatis-Plus 自动填充，一般用于创建时间等字段
+// 需要配合 MetaObjectHandler 实现自动填充逻辑
 public class MyMetaObjectHandler implements MetaObjectHandler {
 
     @Override

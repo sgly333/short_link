@@ -1,0 +1,90 @@
+# 业务：与 compose 同级放置 Maven 打出的可执行包（*-1.0-SNAPSHOT-exec.jar），加入网络 shortlink-net
+# 路径示例：gateway/target/shortlink-gateway-1.0-SNAPSHOT-exec.jar 拷到当前目录
+#
+# 1. 同目录放好 link.sql、link-data.sql、broker.conf 后：docker compose -f docker-compose.infra.yml up -d
+#    （须含 rocketmq-namesrv 与 rocketmq-broker；仅起 NameServer 会导致 project 因 RocketMQ 消费者起不来而反复重启）
+# 2. docker compose -f docker-compose.runtime.yml --env-file runtime.env up -d
+#
+# 容器启动顺序：project → admin → gateway（depends_on）。
+# 说明：仅保证容器先后启动，不保证进程已监听端口；首次启动若网关快于下游，
+#       Nacos/Feign 一般会重试，或等几秒再访问。
+
+services:
+  shortlink-gateway:
+    image: eclipse-temurin:17-jre-jammy
+    container_name: shortlink-gateway
+    working_dir: /app
+    volumes:
+      - ./shortlink-gateway-exec.jar:/app/app.jar:ro
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+    environment:
+      TZ: Asia/Shanghai
+      # 8G 机器默认给 1G（可在 runtime.env 覆盖）
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms512m -Xmx1024m}
+      # dev：网关路由；docker：application-docker.yaml 中 redis/nacos 使用服务名
+      SPRING_PROFILES_ACTIVE: dev,docker
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: ${NACOS_ADDR:-nacos:8848}
+    command: ["java", "-jar", "/app/app.jar"]
+    depends_on:
+      - shortlink-admin
+    networks:
+      - shortlink-net
+    restart: unless-stopped
+
+  shortlink-admin:
+    image: eclipse-temurin:17-jre-jammy
+    container_name: shortlink-admin
+    working_dir: /app
+    volumes:
+      - ./shortlink-admin-1.0-SNAPSHOT-exec.jar:/app/app.jar:ro
+    ports:
+      - "${ADMIN_PORT:-8002}:8002"
+    environment:
+      TZ: Asia/Shanghai
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms512m -Xmx1024m}
+      DATABASE_ENV: docker
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: ${NACOS_ADDR:-nacos:8848}
+    command: ["java", "-jar", "/app/app.jar"]
+    depends_on:
+      - shortlink-project
+    networks:
+      - shortlink-net
+    restart: unless-stopped
+
+  shortlink-project:
+    image: eclipse-temurin:17-jre-jammy
+    container_name: shortlink-project
+    working_dir: /app
+    volumes:
+      - ./shortlink-project-1.0-SNAPSHOT-exec.jar:/app/app.jar:ro
+    ports:
+      - "${PROJECT_PORT:-8001}:8001"
+    environment:
+      TZ: Asia/Shanghai
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms512m -Xmx1024m}
+      # 与 shardingsphere-config-docker.yaml 一致；并启用 application-docker.yaml（redis/nacos/rocketmq 走服务名）
+      DATABASE_ENV: docker
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: ${NACOS_ADDR:-nacos:8848}
+      ROCKETMQ_NAME_SERVER: ${ROCKETMQ_NAMESRV:-rocketmq-namesrv:9876}
+      SHORT_LINK_DOMAIN_DEFAULT: ${SHORT_LINK_DOMAIN_DEFAULT:-47.99.78.39}
+    command: ["java", "-jar", "/app/app.jar"]
+    networks:
+      - shortlink-net
+    restart: unless-stopped
+
+networks:
+  shortlink-net:
+    external: true
+    name: shortlink-net

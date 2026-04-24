@@ -45,7 +45,7 @@ import java.util.List;
 
 /**
  * 短链接控制层
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *  
  */
 @RestController
 @RequiredArgsConstructor
@@ -65,9 +65,14 @@ public class ShortLinkController {
      * 创建短链接
      */
     @PostMapping("/api/short-link/v1/create")
+    // Sentinel 限流/熔断保护 意思是： 如果接口被限流 调用 blockHandler
+    // 配置在config中
+
     @SentinelResource(
             value = "create_short-link",
+            // 触发限流时执行 createShortLinkBlockHandlerMethod
             blockHandler = "createShortLinkBlockHandlerMethod",
+            // 表示blockHandler 方法在哪个类里
             blockHandlerClass = CustomBlockHandler.class
     )
     public Result<ShortLinkCreateRespDTO> createShortLink(@RequestBody ShortLinkCreateReqDTO requestParam) {

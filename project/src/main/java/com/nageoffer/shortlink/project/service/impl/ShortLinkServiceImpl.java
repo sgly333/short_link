@@ -96,11 +96,12 @@ import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.S
 
 /**
  * 短链接接口实现层
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *  
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
+// 多态是指父类或接口的引用指向子类对象，编译时只能调用引用类型中声明的方法，但运行时执行的是实际对象中重写的方法实现。
 public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLinkDO> implements ShortLinkService {
 
     private final RBloomFilter<String> shortUriCreateCachePenetrationBloomFilter;
@@ -113,16 +114,20 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @Value("${short-link.domain.default}")
     private String createShortLinkDefaultDomain;
 
+    // 让方法在一个数据库事务中执行，并在发生指定异常时回滚事务。
     @Transactional(rollbackFor = Exception.class)
     @Override
     public ShortLinkCreateRespDTO createShortLink(ShortLinkCreateReqDTO requestParam) {
         // 短链接接口的并发量有多少？如何测试？详情查看：https://nageoffer.com/shortlink/question
+        // 验证白名单
         verificationWhitelist(requestParam.getOriginUrl());
+        // 生成短链接后缀
         String shortLinkSuffix = generateSuffix(requestParam);
         String fullShortUrl = StrBuilder.create(createShortLinkDefaultDomain)
                 .append("/")
                 .append(shortLinkSuffix)
                 .toString();
+
         ShortLinkDO shortLinkDO = ShortLinkDO.builder()
                 .domain(createShortLinkDefaultDomain)
                 .originUrl(requestParam.getOriginUrl())
@@ -146,6 +151,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 .build();
         try {
             // 短链接项目有多少数据？如何解决海量数据存储？详情查看：https://nageoffer.com/shortlink/question
+            // baseMapper 是在父类 ServiceImpl 中定义并自动注入的。  在这里其实就是ShortLinkMapper
             baseMapper.insert(shortLinkDO);
             // 短链接数据库分片键是如何考虑的？详情查看：https://nageoffer.com/shortlink/question
             shortLinkGotoMapper.insert(linkGotoDO);
@@ -267,6 +273,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             throw new ClientException("短链接记录不存在");
         }
         if (Objects.equals(hasShortLinkDO.getGid(), requestParam.getGid())) {
+            // gid 相同 也就是在一个物理表中
             LambdaUpdateWrapper<ShortLinkDO> updateWrapper = Wrappers.lambdaUpdate(ShortLinkDO.class)
                     .eq(ShortLinkDO::getFullShortUrl, requestParam.getFullShortUrl())
                     .eq(ShortLinkDO::getGid, requestParam.getGid())
@@ -284,13 +291,16 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     .validDateType(requestParam.getValidDateType())
                     .validDate(requestParam.getValidDate())
                     .build();
+            // 根据你刚才构造的 updateWrapper 条件，把 实体对象 shortLinkDO 和 wrapper 中指定的字段更新到数据库
             baseMapper.update(shortLinkDO, updateWrapper);
         } else {
             // 为什么监控表要加上Gid？不加的话是否就不存在读写锁？详情查看：https://nageoffer.com/shortlink/question
+            // 读端其实没有上锁 如果读端也上锁 那么在进行修改时就会短暂的无法使用链接跳转 会影响用户体验
             RReadWriteLock readWriteLock = redissonClient.getReadWriteLock(String.format(LOCK_GID_UPDATE_KEY, requestParam.getFullShortUrl()));
             RLock rLock = readWriteLock.writeLock();
             rLock.lock();
             try {
+
                 LambdaUpdateWrapper<ShortLinkDO> linkUpdateWrapper = Wrappers.lambdaUpdate(ShortLinkDO.class)
                         .eq(ShortLinkDO::getFullShortUrl, requestParam.getFullShortUrl())
                         .eq(ShortLinkDO::getGid, hasShortLinkDO.getGid())
@@ -320,6 +330,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                         .delTime(0L)
                         .build();
                 baseMapper.insert(shortLinkDO);
+                //修改短链接路由表
                 LambdaQueryWrapper<ShortLinkGotoDO> linkGotoQueryWrapper = Wrappers.lambdaQuery(ShortLinkGotoDO.class)
                         .eq(ShortLinkGotoDO::getFullShortUrl, requestParam.getFullShortUrl())
                         .eq(ShortLinkGotoDO::getGid, hasShortLinkDO.getGid());
@@ -332,6 +343,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             }
         }
         // 短链接如何保障缓存和数据库一致性？详情查看：https://nageoffer.com/shortlink/question
+        // 有效期不一样 或者 原始链接不一样 然后就要去删除redis里面 这个短链接的缓存
         if (!Objects.equals(hasShortLinkDO.getValidDateType(), requestParam.getValidDateType())
                 || !Objects.equals(hasShortLinkDO.getValidDate(), requestParam.getValidDate())
                 || !Objects.equals(hasShortLinkDO.getOriginUrl(), requestParam.getOriginUrl())) {
@@ -346,6 +358,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     }
 
     @Override
+    //  IPage 不是分页查询器，而是 MyBatis-Plus 定义的分页结果接口（分页对象）
     public IPage<ShortLinkPageRespDTO> pageShortLink(ShortLinkPageReqDTO requestParam) {
         IPage<ShortLinkDO> resultPage = baseMapper.pageLink(requestParam);
         return resultPage.convert(each -> {
@@ -374,6 +387,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         // 短链接接口的并发量有多少？如何测试？详情查看：https://nageoffer.com/shortlink/question
         // 面试中如何回答短链接是如何跳转长链接？详情查看：https://nageoffer.com/shortlink/question
         String serverName = request.getServerName();
+        // 先获取端口号如果 不是 80 转成字符串 前面加: 如果是 80 就返回空字符串
         String serverPort = Optional.of(request.getServerPort())
                 .filter(each -> !Objects.equals(each, 80))
                 .map(String::valueOf)
@@ -382,23 +396,27 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         String fullShortUrl = serverName + serverPort + "/" + shortUri;
         String originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
         if (StrUtil.isNotBlank(originalLink)) {
-            shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response));
+            shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response)); // 统计信息
             ((HttpServletResponse) response).sendRedirect(originalLink);
             return;
         }
+        // 👆 redis当中查到了缓存直接进行302重定向
         boolean contains = shortUriCreateCachePenetrationBloomFilter.contains(fullShortUrl);
         if (!contains) {
             ((HttpServletResponse) response).sendRedirect("/page/notfound");
             return;
         }
+        // 通过了布隆过滤器说明可能存在 这个短链接
         String gotoIsNullShortLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl));
         if (StrUtil.isNotBlank(gotoIsNullShortLink)) {
             ((HttpServletResponse) response).sendRedirect("/page/notfound");
             return;
         }
+
         RLock lock = redissonClient.getLock(String.format(LOCK_GOTO_SHORT_LINK_KEY, fullShortUrl));
         lock.lock();
         try {
+            // 加锁后的重复检查是为了防止多个线程在等待锁时已经有线程把数据写入缓存，从而避免其他线程再次访问数据库（双重检查防止缓存击穿）。
             originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
             if (StrUtil.isNotBlank(originalLink)) {
                 shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response));
@@ -429,6 +447,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 ((HttpServletResponse) response).sendRedirect("/page/notfound");
                 return;
             }
+            // 下面就属于是缓存过期了 需重新添加缓存
             stringRedisTemplate.opsForValue().set(
                     String.format(GOTO_SHORT_LINK_KEY, fullShortUrl),
                     shortLinkDO.getOriginUrl(),
@@ -441,10 +460,12 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         }
     }
 
+    // 记录信息 访问次数 访问人数 访问ip等
     private ShortLinkStatsRecordDTO buildLinkStatsRecordAndSetUser(String fullShortUrl, ServletRequest request, ServletResponse response) {
         AtomicBoolean uvFirstFlag = new AtomicBoolean();
         Cookie[] cookies = ((HttpServletRequest) request).getCookies();
         AtomicReference<String> uv = new AtomicReference<>();
+        // 匿名实现类 实现一个Runnable接口 功能是 为第一次访问的用户 设置cookie 并存入缓存中 之后这个用户就不算新用户了
         Runnable addResponseCookieTask = () -> {
             uv.set(UUID.fastUUID().toString());
             Cookie uvCookie = new Cookie("uv", uv.get());
@@ -467,6 +488,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         } else {
             addResponseCookieTask.run();
         }
+        // 获取IP 和 设备信息
         String remoteAddr = LinkUtil.getActualIp(((HttpServletRequest) request));
         String os = LinkUtil.getOs(((HttpServletRequest) request));
         String browser = LinkUtil.getBrowser(((HttpServletRequest) request));
@@ -542,6 +564,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     }
 
     @SneakyThrows
+    // 根据一个网站 URL，尝试获取该网站的 favicon（网站图标）地址
     private String getFavicon(String url) {
         URL targetUrl = new URL(url);
         HttpURLConnection connection = (HttpURLConnection) targetUrl.openConnection();

@@ -27,8 +27,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
  * 用户配置自动装配
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：link）获取项目资料
+ *  
  */
+// 注册filter类
 @Configuration
 public class UserConfiguration {
 
@@ -36,10 +37,13 @@ public class UserConfiguration {
      * 用户信息传递过滤器
      */
     @Bean
+    // 向 Spring Boot 容器注册一个全局的 Servlet Filter（过滤器），让 UserTransmitFilter 在每次 HTTP 请求时都会执行。
     public FilterRegistrationBean<UserTransmitFilter> globalUserTransmitFilter() {
         FilterRegistrationBean<UserTransmitFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new UserTransmitFilter());
+        // 拦截所有请求
         registration.addUrlPatterns("/*");
+        // 设置优先级 数字越小 → 优先级越高
         registration.setOrder(0);
         return registration;
     }

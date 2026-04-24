@@ -1,0 +1,104 @@
+# 中间件：MySQL 5.7 / Redis / Nacos 2.1.2 / RocketMQ
+#
+# 请在「shortlink」部署目录下放置（与 compose 同级）：
+#   link.sql、link-data.sql、broker.conf（可从本仓库 docker/rocketmq/broker.conf 复制）
+# 在此目录执行：docker compose -f docker-compose.infra.yml up -d
+# 再执行业务：docker compose -f docker-compose.runtime.yml --env-file runtime.env up -d
+#
+# MySQL root/123456、Redis 123456；网络 shortlink-net；Nacos 服务名 nacos2，别名 nacos
+
+name: shortlink-infra
+
+services:
+  mysql:
+    image: mysql:5.7.36
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: link
+    ports:
+      - "${MYSQL_HOST_PORT:-3306}:3306"
+    volumes:
+      - shortlink_mysql_data:/var/lib/mysql
+      - ./link.sql:/docker-entrypoint-initdb.d/01-link.sql:ro
+      - ./link-data.sql:/docker-entrypoint-initdb.d/02-link-data.sql:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    networks:
+      - shortlink-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "123456"]
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - shortlink_redis_data:/data
+    networks:
+      - shortlink-net
+
+  nacos2:
+    image: nacos/nacos-server:v2.1.2
+    container_name: nacos2
+    environment:
+      MODE: standalone
+      TIME_ZONE: Asia/Shanghai
+      # 8G 机器建议（可按实际再调大）
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      JVM_XMN: 256m
+    ports:
+      - "${NACOS_HTTP_PORT:-8848}:8848"
+      - "${NACOS_GRPC_PORT:-9848}:9848"
+    networks:
+      shortlink-net:
+        aliases:
+          - nacos
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:4.9.7
+    container_name: rocketmq-namesrv
+    ports:  
+      - "${ROCKETMQ_NAMESRV_PORT:-9876}:9876"
+    networks:
+      - shortlink-net
+    # 8G 机器可适当调大，避免频繁 GC
+    environment:
+      JAVA_OPT_EXT: "-Xms256m -Xmx512m -XX:MetaspaceSize=128m"
+    command: ["sh", "mqnamesrv"]
+
+  rocketmq-broker:
+    image: apache/rocketmq:4.9.7
+    container_name: rocketmq-broker
+    depends_on:
+      - rocketmq-namesrv
+    ports:
+      - "${ROCKETMQ_BROKER_VIP:-10909}:10909"
+      - "${ROCKETMQ_BROKER_MAIN:-10911}:10911"
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+      # 8G 机器建议（可按实际再调大；仍建议设置上限避免占满宿主机）
+      JAVA_OPT_EXT: "-Xms512m -Xmx1024m -Xmn256m -XX:MaxDirectMemorySize=256m -XX:MetaspaceSize=128m"
+    volumes:
+      - ./broker.conf:/home/rocketmq/rocketmq-4.9.7/conf/broker.conf:ro
+    networks:
+      - shortlink-net
+    command: ["sh", "mqbroker", "-n", "rocketmq-namesrv:9876", "-c", "/home/rocketmq/rocketmq-4.9.7/conf/broker.conf"]
+
+volumes:
+  shortlink_mysql_data:
+  shortlink_redis_data:
+
+networks:
+  shortlink-net:
+    name: shortlink-net
+    driver: bridge
