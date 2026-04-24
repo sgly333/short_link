@@ -23,22 +23,10 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.nageoffer.shortlink.project.common.convention.exception.ServiceException;
-import com.nageoffer.shortlink.project.dao.entity.LinkAccessLogsDO;
 import com.nageoffer.shortlink.project.dao.entity.LinkAccessStatsDO;
-import com.nageoffer.shortlink.project.dao.entity.LinkBrowserStatsDO;
-import com.nageoffer.shortlink.project.dao.entity.LinkDeviceStatsDO;
-import com.nageoffer.shortlink.project.dao.entity.LinkLocaleStatsDO;
-import com.nageoffer.shortlink.project.dao.entity.LinkNetworkStatsDO;
-import com.nageoffer.shortlink.project.dao.entity.LinkOsStatsDO;
 import com.nageoffer.shortlink.project.dao.entity.LinkStatsTodayDO;
 import com.nageoffer.shortlink.project.dao.entity.ShortLinkGotoDO;
-import com.nageoffer.shortlink.project.dao.mapper.LinkAccessLogsMapper;
 import com.nageoffer.shortlink.project.dao.mapper.LinkAccessStatsMapper;
-import com.nageoffer.shortlink.project.dao.mapper.LinkBrowserStatsMapper;
-import com.nageoffer.shortlink.project.dao.mapper.LinkDeviceStatsMapper;
-import com.nageoffer.shortlink.project.dao.mapper.LinkLocaleStatsMapper;
-import com.nageoffer.shortlink.project.dao.mapper.LinkNetworkStatsMapper;
-import com.nageoffer.shortlink.project.dao.mapper.LinkOsStatsMapper;
 import com.nageoffer.shortlink.project.dao.mapper.LinkStatsTodayMapper;
 import com.nageoffer.shortlink.project.dao.mapper.ShortLinkGotoMapper;
 import com.nageoffer.shortlink.project.dao.mapper.ShortLinkMapper;
@@ -75,12 +63,6 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
     private final ShortLinkGotoMapper shortLinkGotoMapper;
     private final RedissonClient redissonClient;
     private final LinkAccessStatsMapper linkAccessStatsMapper;
-    private final LinkLocaleStatsMapper linkLocaleStatsMapper;
-    private final LinkOsStatsMapper linkOsStatsMapper;
-    private final LinkBrowserStatsMapper linkBrowserStatsMapper;
-    private final LinkAccessLogsMapper linkAccessLogsMapper;
-    private final LinkDeviceStatsMapper linkDeviceStatsMapper;
-    private final LinkNetworkStatsMapper linkNetworkStatsMapper;
     private final LinkStatsTodayMapper linkStatsTodayMapper;
     private final MessageQueueIdempotentHandler messageQueueIdempotentHandler;
 
@@ -133,57 +115,6 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
                     .date(currentDate)
                     .build();
             linkAccessStatsMapper.shortLinkStats(linkAccessStatsDO);
-            String actualProvince = "中国";
-            String actualCity = "中国";
-            LinkLocaleStatsDO linkLocaleStatsDO = LinkLocaleStatsDO.builder()
-                    .province(actualProvince)
-                    .city(actualCity)
-                    .adcode("000000")
-                    .cnt(1)
-                    .fullShortUrl(fullShortUrl)
-                    .country("中国")
-                    .date(currentDate)
-                    .build();
-            linkLocaleStatsMapper.shortLinkLocaleState(linkLocaleStatsDO);
-            LinkOsStatsDO linkOsStatsDO = LinkOsStatsDO.builder()
-                    .os(statsRecord.getOs())
-                    .cnt(1)
-                    .fullShortUrl(fullShortUrl)
-                    .date(currentDate)
-                    .build();
-            linkOsStatsMapper.shortLinkOsState(linkOsStatsDO);
-            LinkBrowserStatsDO linkBrowserStatsDO = LinkBrowserStatsDO.builder()
-                    .browser(statsRecord.getBrowser())
-                    .cnt(1)
-                    .fullShortUrl(fullShortUrl)
-                    .date(currentDate)
-                    .build();
-            linkBrowserStatsMapper.shortLinkBrowserState(linkBrowserStatsDO);
-            LinkDeviceStatsDO linkDeviceStatsDO = LinkDeviceStatsDO.builder()
-                    .device(statsRecord.getDevice())
-                    .cnt(1)
-                    .fullShortUrl(fullShortUrl)
-                    .date(currentDate)
-                    .build();
-            linkDeviceStatsMapper.shortLinkDeviceState(linkDeviceStatsDO);
-            LinkNetworkStatsDO linkNetworkStatsDO = LinkNetworkStatsDO.builder()
-                    .network(statsRecord.getNetwork())
-                    .cnt(1)
-                    .fullShortUrl(fullShortUrl)
-                    .date(currentDate)
-                    .build();
-            linkNetworkStatsMapper.shortLinkNetworkState(linkNetworkStatsDO);
-            LinkAccessLogsDO linkAccessLogsDO = LinkAccessLogsDO.builder()
-                    .user(statsRecord.getUv())
-                    .ip(statsRecord.getRemoteAddr())
-                    .browser(statsRecord.getBrowser())
-                    .os(statsRecord.getOs())
-                    .network(statsRecord.getNetwork())
-                    .device(statsRecord.getDevice())
-                    .locale("中国")
-                    .fullShortUrl(fullShortUrl)
-                    .build();
-            linkAccessLogsMapper.insert(linkAccessLogsDO);
             shortLinkMapper.incrementStats(gid, fullShortUrl, 1, statsRecord.getUvFirstFlag() ? 1 : 0, statsRecord.getUipFirstFlag() ? 1 : 0);
             LinkStatsTodayDO linkStatsTodayDO = LinkStatsTodayDO.builder()
                     .todayPv(1)
