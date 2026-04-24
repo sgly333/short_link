@@ -19,31 +19,20 @@ package com.nageoffer.shortlink.project.mq.consumer;
 
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.date.Week;
+import cn.hutool.crypto.digest.DigestUtil;
 import com.alibaba.fastjson2.JSON;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.nageoffer.shortlink.project.common.convention.exception.ServiceException;
-import com.nageoffer.shortlink.project.dao.entity.LinkAccessStatsDO;
-import com.nageoffer.shortlink.project.dao.entity.LinkStatsTodayDO;
-import com.nageoffer.shortlink.project.dao.entity.ShortLinkGotoDO;
-import com.nageoffer.shortlink.project.dao.mapper.LinkAccessStatsMapper;
-import com.nageoffer.shortlink.project.dao.mapper.LinkStatsTodayMapper;
-import com.nageoffer.shortlink.project.dao.mapper.ShortLinkGotoMapper;
-import com.nageoffer.shortlink.project.dao.mapper.ShortLinkMapper;
 import com.nageoffer.shortlink.project.dto.biz.ShortLinkStatsRecordDTO;
 import com.nageoffer.shortlink.project.mq.idempotent.MessageQueueIdempotentHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
-import org.redisson.api.RLock;
-import org.redisson.api.RReadWriteLock;
-import org.redisson.api.RedissonClient;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
-
-import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.LOCK_GID_UPDATE_KEY;
+import java.util.Date;
+import java.util.Map;
 
 /**
  * 短链接监控状态保存消息队列消费者
@@ -59,11 +48,9 @@ import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.L
 )
 public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, String>> {
 
-    private final ShortLinkMapper shortLinkMapper;
-    private final ShortLinkGotoMapper shortLinkGotoMapper;
-    private final RedissonClient redissonClient;
-    private final LinkAccessStatsMapper linkAccessStatsMapper;
-    private final LinkStatsTodayMapper linkStatsTodayMapper;
+    private static final String STATS_FLUSH_KEY_PREFIX = "short-link:stats:flush";
+
+    private final StringRedisTemplate stringRedisTemplate;
     private final MessageQueueIdempotentHandler messageQueueIdempotentHandler;
 
     @Override
@@ -93,40 +80,19 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
 
     public void actualSaveShortLinkStats(ShortLinkStatsRecordDTO statsRecord) {
         String fullShortUrl = statsRecord.getFullShortUrl();
-        RReadWriteLock readWriteLock = redissonClient.getReadWriteLock(String.format(LOCK_GID_UPDATE_KEY, fullShortUrl));
-        RLock rLock = readWriteLock.readLock();
-        rLock.lock();
-        try {
-            LambdaQueryWrapper<ShortLinkGotoDO> queryWrapper = Wrappers.lambdaQuery(ShortLinkGotoDO.class)
-                    .eq(ShortLinkGotoDO::getFullShortUrl, fullShortUrl);
-            ShortLinkGotoDO shortLinkGotoDO = shortLinkGotoMapper.selectOne(queryWrapper);
-            String gid = shortLinkGotoDO.getGid();
-            Date currentDate = statsRecord.getCurrentDate();
-            int hour = DateUtil.hour(currentDate, true);
-            Week week = DateUtil.dayOfWeekEnum(currentDate);
-            int weekValue = week.getIso8601Value();
-            LinkAccessStatsDO linkAccessStatsDO = LinkAccessStatsDO.builder()
-                    .pv(1)
-                    .uv(statsRecord.getUvFirstFlag() ? 1 : 0)
-                    .uip(statsRecord.getUipFirstFlag() ? 1 : 0)
-                    .hour(hour)
-                    .weekday(weekValue)
-                    .fullShortUrl(fullShortUrl)
-                    .date(currentDate)
-                    .build();
-            linkAccessStatsMapper.shortLinkStats(linkAccessStatsDO);
-            shortLinkMapper.incrementStats(gid, fullShortUrl, 1, statsRecord.getUvFirstFlag() ? 1 : 0, statsRecord.getUipFirstFlag() ? 1 : 0);
-            LinkStatsTodayDO linkStatsTodayDO = LinkStatsTodayDO.builder()
-                    .todayPv(1)
-                    .todayUv(statsRecord.getUvFirstFlag() ? 1 : 0)
-                    .todayUip(statsRecord.getUipFirstFlag() ? 1 : 0)
-                    .fullShortUrl(fullShortUrl)
-                    .date(currentDate)
-                    .build();
-            linkStatsTodayMapper.shortLinkTodayState(linkStatsTodayDO);
-        } finally {
-            rLock.unlock();
-        }
+        Date currentDate = statsRecord.getCurrentDate();
+        int hour = DateUtil.hour(currentDate, true);
+        Week week = DateUtil.dayOfWeekEnum(currentDate);
+        int weekValue = week.getIso8601Value();
+        String dateTag = DateUtil.formatDate(currentDate);
+        String key = String.format("%s:%s:%s:%d:%d", STATS_FLUSH_KEY_PREFIX, DigestUtil.md5Hex(fullShortUrl), dateTag, hour, weekValue);
+        stringRedisTemplate.opsForHash().putIfAbsent(key, "fullShortUrl", fullShortUrl);
+        stringRedisTemplate.opsForHash().putIfAbsent(key, "date", dateTag);
+        stringRedisTemplate.opsForHash().putIfAbsent(key, "hour", String.valueOf(hour));
+        stringRedisTemplate.opsForHash().putIfAbsent(key, "weekday", String.valueOf(weekValue));
+        stringRedisTemplate.opsForHash().increment(key, "pv", 1L);
+        stringRedisTemplate.opsForHash().increment(key, "uv", statsRecord.getUvFirstFlag() ? 1L : 0L);
+        stringRedisTemplate.opsForHash().increment(key, "uip", statsRecord.getUipFirstFlag() ? 1L : 0L);
     }
 }
 

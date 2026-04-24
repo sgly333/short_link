@@ -397,7 +397,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         String originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
         if (StrUtil.isNotBlank(originalLink)) {
             shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response)); // 统计信息
-            ((HttpServletResponse) response).sendRedirect(originalLink);
+//            ((HttpServletResponse) response).sendRedirect(originalLink);
             return;
         }
         // 👆 redis当中查到了缓存直接进行302重定向

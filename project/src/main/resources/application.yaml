@@ -25,6 +25,9 @@ spring:
 short-link:
   domain:
     default: nurl.ink:8001
+  stats:
+    flush:
+      interval-ms: 5000
   goto-domain:
     white-list:
       enable: false
@@ -36,8 +39,6 @@ short-link:
         - cnblogs.com
 
 mybatis-plus:
-  configuration:
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   mapper-locations: classpath:mapper/*.xml
 
 

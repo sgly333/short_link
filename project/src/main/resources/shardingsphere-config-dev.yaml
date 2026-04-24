@@ -41,7 +41,7 @@ rules:
         props:
           sharding-count: 16
 props:
-  sql-show: true
+  sql-show: false
 
 # 表：t_link
 #作用：存储短链接核心信息（如原始URL、分组信息、状态等）
