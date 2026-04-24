@@ -20,6 +20,7 @@ package com.nageoffer.shortlink.project.mq.producer;
 import com.alibaba.fastjson2.JSON;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.rocketmq.client.producer.SendCallback;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.common.message.MessageConst;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
@@ -56,12 +57,20 @@ public class ShortLinkStatsSaveProducer {
                 .withPayload(producerMap)
                 .setHeader(MessageConst.PROPERTY_KEYS, keys)
                 .build();
-        SendResult sendResult;
         try {
-            sendResult = rocketMQTemplate.syncSend(statsSaveTopic, build, 2000L);
-            log.info("[消息访问统计监控] 消息发送结果：{}，消息ID：{}，消息Keys：{}", sendResult.getSendStatus(), sendResult.getMsgId(), keys);
+            rocketMQTemplate.asyncSend(statsSaveTopic, build, new SendCallback() {
+                @Override
+                public void onSuccess(SendResult sendResult) {
+                    log.info("[消息访问统计监控] 异步消息发送结果：{}，消息ID：{}，消息Keys：{}", sendResult.getSendStatus(), sendResult.getMsgId(), keys);
+                }
+
+                @Override
+                public void onException(Throwable ex) {
+                    log.error("[消息访问统计监控] 异步消息发送失败，消息体：{}，消息Keys：{}", JSON.toJSONString(producerMap), keys, ex);
+                }
+            }, 2000L);
         } catch (Throwable ex) {
-            log.error("[消息访问统计监控] 消息发送失败，消息体：{}", JSON.toJSONString(producerMap), ex);
+            log.error("[消息访问统计监控] 异步消息提交失败，消息体：{}，消息Keys：{}", JSON.toJSONString(producerMap), keys, ex);
             // 自定义行为...
         }
     }
