@@ -93,6 +93,7 @@ import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.G
 import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.LOCK_GID_UPDATE_KEY;
 import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.LOCK_GOTO_SHORT_LINK_KEY;
 import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.SHORT_LINK_CREATE_LOCK_KEY;
+import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.SHORT_LINK_LOCAL_CACHE_EVICT_CHANNEL;
 import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.SHORT_LINK_STATS_UIP_KEY;
 import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.SHORT_LINK_STATS_UV_KEY;
 
@@ -126,6 +127,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @Value("${short-link.domain.default}")
     private String createShortLinkDefaultDomain;
 
+    @Value("${short-link.favicon.default:/favicon.ico}")
+    private String defaultFavicon;
+
     // 让方法在一个数据库事务中执行，并在发生指定异常时回滚事务。
     @Transactional(rollbackFor = Exception.class)
     @Override
@@ -155,7 +159,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 .totalUip(0)
                 .delTime(0L)
                 .fullShortUrl(fullShortUrl)
-                .favicon(getFavicon(requestParam.getOriginUrl()))
+                .favicon(Optional.ofNullable(getFavicon(requestParam.getOriginUrl())).orElse(defaultFavicon))
                 .build();
         ShortLinkGotoDO linkGotoDO = ShortLinkGotoDO.builder()
                 .fullShortUrl(fullShortUrl)
@@ -217,7 +221,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     .totalUip(0)
                     .delTime(0L)
                     .fullShortUrl(fullShortUrl)
-                    .favicon(getFavicon(requestParam.getOriginUrl()))
+                    .favicon(Optional.ofNullable(getFavicon(requestParam.getOriginUrl())).orElse(defaultFavicon))
                     .build();
             ShortLinkGotoDO linkGotoDO = ShortLinkGotoDO.builder()
                     .fullShortUrl(fullShortUrl)
@@ -295,7 +299,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             ShortLinkDO shortLinkDO = ShortLinkDO.builder()
                     .domain(hasShortLinkDO.getDomain())
                     .shortUri(hasShortLinkDO.getShortUri())
-                    .favicon(Objects.equals(requestParam.getOriginUrl(), hasShortLinkDO.getOriginUrl()) ? hasShortLinkDO.getFavicon() : getFavicon(requestParam.getOriginUrl()))
+                    .favicon(Objects.equals(requestParam.getOriginUrl(), hasShortLinkDO.getOriginUrl())
+                            ? hasShortLinkDO.getFavicon()
+                            : Optional.ofNullable(getFavicon(requestParam.getOriginUrl())).orElse(defaultFavicon))
                     .createdType(hasShortLinkDO.getCreatedType())
                     .gid(requestParam.getGid())
                     .originUrl(requestParam.getOriginUrl())
@@ -338,7 +344,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                         .totalUv(hasShortLinkDO.getTotalUv())
                         .totalUip(hasShortLinkDO.getTotalUip())
                         .fullShortUrl(hasShortLinkDO.getFullShortUrl())
-                        .favicon(Objects.equals(requestParam.getOriginUrl(), hasShortLinkDO.getOriginUrl()) ? hasShortLinkDO.getFavicon() : getFavicon(requestParam.getOriginUrl()))
+                        .favicon(Objects.equals(requestParam.getOriginUrl(), hasShortLinkDO.getOriginUrl())
+                                ? hasShortLinkDO.getFavicon()
+                                : Optional.ofNullable(getFavicon(requestParam.getOriginUrl())).orElse(defaultFavicon))
                         .delTime(0L)
                         .build();
                 baseMapper.insert(shortLinkDO);
@@ -360,12 +368,13 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 || !Objects.equals(hasShortLinkDO.getValidDate(), requestParam.getValidDate())
                 || !Objects.equals(hasShortLinkDO.getOriginUrl(), requestParam.getOriginUrl())) {
             stringRedisTemplate.delete(String.format(GOTO_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
-            localOriginUrlCache.invalidate(requestParam.getFullShortUrl());
+            evictLocalCache(requestParam.getFullShortUrl());
+            publishLocalCacheEvict(requestParam.getFullShortUrl());
             Date currentDate = new Date();
             if (hasShortLinkDO.getValidDate() != null && hasShortLinkDO.getValidDate().before(currentDate)) {
                 if (Objects.equals(requestParam.getValidDateType(), VailDateTypeEnum.PERMANENT.getType()) || requestParam.getValidDate().after(currentDate)) {
                     stringRedisTemplate.delete(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
-                    localNullUrlCache.invalidate(requestParam.getFullShortUrl());
+                    evictLocalCache(requestParam.getFullShortUrl());
                 }
             }
         }
@@ -592,22 +601,39 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         return shorUri;
     }
 
-    @SneakyThrows
     // 根据一个网站 URL，尝试获取该网站的 favicon（网站图标）地址
     private String getFavicon(String url) {
-        URL targetUrl = new URL(url);
-        HttpURLConnection connection = (HttpURLConnection) targetUrl.openConnection();
-        connection.setRequestMethod("GET");
-        connection.connect();
-        int responseCode = connection.getResponseCode();
-        if (HttpURLConnection.HTTP_OK == responseCode) {
-            Document document = Jsoup.connect(url).get();
-            Element faviconLink = document.select("link[rel~=(?i)^(shortcut )?icon]").first();
-            if (faviconLink != null) {
-                return faviconLink.attr("abs:href");
+        try {
+            URL targetUrl = new URL(url);
+            HttpURLConnection connection = (HttpURLConnection) targetUrl.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(500);
+            connection.setReadTimeout(500);
+            connection.connect();
+            int responseCode = connection.getResponseCode();
+            if (HttpURLConnection.HTTP_OK != responseCode) {
+                return null;
             }
+            Document document = Jsoup.connect(url)
+                    .timeout(800)
+                    .userAgent("Mozilla/5.0")
+                    .followRedirects(true)
+                    .get();
+            Element faviconLink = document.select("link[rel~=(?i)^(shortcut )?icon]").first();
+            if (faviconLink == null) {
+                return null;
+            }
+            String absHref = faviconLink.attr("abs:href");
+            if (StrUtil.isNotBlank(absHref)) {
+                return absHref;
+            }
+            // 兜底：部分页面无法生成 abs:href 时，返回原始 href
+            String href = faviconLink.attr("href");
+            return StrUtil.isBlank(href) ? null : href;
+        } catch (Exception ex) {
+            log.warn("获取 favicon 失败，url={}", url, ex);
+            return null;
         }
-        return null;
     }
 
     private void verificationWhitelist(String originUrl) {
@@ -623,5 +649,14 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         if (!details.contains(domain)) {
             throw new ClientException("演示环境为避免恶意攻击，请生成以下网站跳转链接：" + gotoDomainWhiteListConfiguration.getNames());
         }
+    }
+
+    private void publishLocalCacheEvict(String fullShortUrl) {
+        stringRedisTemplate.convertAndSend(SHORT_LINK_LOCAL_CACHE_EVICT_CHANNEL, fullShortUrl);
+    }
+
+    public void evictLocalCache(String fullShortUrl) {
+        localOriginUrlCache.invalidate(fullShortUrl);
+        localNullUrlCache.invalidate(fullShortUrl);
     }
 }

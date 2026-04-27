@@ -45,7 +45,7 @@ public class SentinelRuleConfig implements InitializingBean {
         // 按照 QPS 限流
         createOrderRule.setGrade(RuleConstant.FLOW_GRADE_QPS);
         // 设置 QPS = 1 也就是每秒最多 1 次请求
-        createOrderRule.setCount(1);
+        createOrderRule.setCount(10000);
         rules.add(createOrderRule);
         FlowRuleManager.loadRules(rules);
     }

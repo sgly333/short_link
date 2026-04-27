@@ -25,6 +25,8 @@ spring:
 short-link:
   domain:
     default: nurl.ink:8001
+  favicon:
+    default: /favicon.ico
   stats:
     flush:
       interval-ms: 5000

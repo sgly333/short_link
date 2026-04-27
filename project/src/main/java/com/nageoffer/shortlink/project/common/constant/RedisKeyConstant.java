@@ -72,4 +72,9 @@ public class RedisKeyConstant {
      * 创建短链接锁标识
      */
     public static final String SHORT_LINK_CREATE_LOCK_KEY = "short-link:lock:create";
+
+    /**
+     * 短链接本地缓存失效广播频道
+     */
+    public static final String SHORT_LINK_LOCAL_CACHE_EVICT_CHANNEL = "short-link:cache:local-evict";
 }
