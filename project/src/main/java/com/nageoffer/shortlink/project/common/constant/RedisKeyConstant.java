@@ -77,4 +77,9 @@ public class RedisKeyConstant {
      * 短链接本地缓存失效广播频道
      */
     public static final String SHORT_LINK_LOCAL_CACHE_EVICT_CHANNEL = "short-link:cache:local-evict";
+
+    /**
+     * 跳转缓存 Redis 删除失败后的重试队列（List，元素为待删的完整 Redis key）
+     */
+    public static final String GOTO_CACHE_DELETE_RETRY_QUEUE_KEY = "short-link:cache:goto-delete-retry";
 }

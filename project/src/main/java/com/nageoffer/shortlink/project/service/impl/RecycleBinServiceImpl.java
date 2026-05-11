@@ -30,9 +30,9 @@ import com.nageoffer.shortlink.project.dto.req.RecycleBinRemoveReqDTO;
 import com.nageoffer.shortlink.project.dto.req.RecycleBinSaveReqDTO;
 import com.nageoffer.shortlink.project.dto.req.ShortLinkRecycleBinPageReqDTO;
 import com.nageoffer.shortlink.project.dto.resp.ShortLinkPageRespDTO;
+import com.nageoffer.shortlink.project.cache.GotoRedisCacheDeleteRetrySupport;
 import com.nageoffer.shortlink.project.service.RecycleBinService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.GOTO_IS_NULL_SHORT_LINK_KEY;
@@ -48,7 +48,7 @@ import static com.nageoffer.shortlink.project.common.constant.RedisKeyConstant.G
 // 同时实现了 RecycleBinService 接口。
 public class RecycleBinServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLinkDO> implements RecycleBinService {
 
-    private final StringRedisTemplate stringRedisTemplate;
+    private final GotoRedisCacheDeleteRetrySupport gotoRedisCacheDeleteRetrySupport;
 
     @Override
     public void saveRecycleBin(RecycleBinSaveReqDTO requestParam) {
@@ -61,7 +61,7 @@ public class RecycleBinServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLin
                 .enableStatus(1)
                 .build();
         baseMapper.update(shortLinkDO, updateWrapper);
-        stringRedisTemplate.delete(String.format(GOTO_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
+        gotoRedisCacheDeleteRetrySupport.deleteOrEnqueue(String.format(GOTO_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
     }
 
     @Override
@@ -85,7 +85,7 @@ public class RecycleBinServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLin
                 .enableStatus(0)
                 .build();
         baseMapper.update(shortLinkDO, updateWrapper);
-        stringRedisTemplate.delete(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
+        gotoRedisCacheDeleteRetrySupport.deleteOrEnqueue(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
     }
 
     @Override

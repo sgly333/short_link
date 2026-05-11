@@ -25,6 +25,11 @@ spring:
 short-link:
   domain:
     default: nurl.ink:8001
+  cache:
+    # 跳转缓存 Redis 删除失败后的重试任务间隔（毫秒）
+    goto-delete-retry-interval-ms: 30000
+    # 定时任务中连续删除失败达到此次数后丢弃该条（防止无限堆积）
+    goto-delete-retry-max-attempts: 10
   favicon:
     default: /favicon.ico
   stats:

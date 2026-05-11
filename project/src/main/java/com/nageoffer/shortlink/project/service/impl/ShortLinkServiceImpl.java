@@ -33,6 +33,8 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.nageoffer.shortlink.project.common.convention.exception.ClientException;
 import com.nageoffer.shortlink.project.common.convention.exception.ServiceException;
+import com.nageoffer.shortlink.project.cache.GotoRedisCacheDeleteRetrySupport;
+import com.nageoffer.shortlink.project.cache.GotoRedisCacheRetrySuccessEvent;
 import com.nageoffer.shortlink.project.common.enums.VailDateTypeEnum;
 import com.nageoffer.shortlink.project.config.GotoDomainWhiteListConfiguration;
 import com.nageoffer.shortlink.project.dao.entity.ShortLinkDO;
@@ -69,6 +71,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RReadWriteLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -115,6 +118,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     private final RedissonClient redissonClient;
     private final ShortLinkStatsSaveProducer shortLinkStatsSaveProducer;
     private final GotoDomainWhiteListConfiguration gotoDomainWhiteListConfiguration;
+    private final GotoRedisCacheDeleteRetrySupport gotoRedisCacheDeleteRetrySupport;
     private final Cache<String, String> localOriginUrlCache = Caffeine.newBuilder()
             .maximumSize(10_000)
             .expireAfterWrite(3, TimeUnit.MINUTES)
@@ -367,14 +371,19 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         if (!Objects.equals(hasShortLinkDO.getValidDateType(), requestParam.getValidDateType())
                 || !Objects.equals(hasShortLinkDO.getValidDate(), requestParam.getValidDate())
                 || !Objects.equals(hasShortLinkDO.getOriginUrl(), requestParam.getOriginUrl())) {
-            stringRedisTemplate.delete(String.format(GOTO_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
-            evictLocalCache(requestParam.getFullShortUrl());
-            publishLocalCacheEvict(requestParam.getFullShortUrl());
+            boolean gotoKeyDeleted = gotoRedisCacheDeleteRetrySupport.deleteOrEnqueue(
+                    String.format(GOTO_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
+            if (gotoKeyDeleted) {
+                evictLocalCache(requestParam.getFullShortUrl());
+                publishLocalCacheEvict(requestParam.getFullShortUrl());
+            }
+            // 仅当「旧有效期已早于当前时间」且「新为永久或新有效期晚于当前」时可能写过空值缓存，此时才删
             Date currentDate = new Date();
             if (hasShortLinkDO.getValidDate() != null && hasShortLinkDO.getValidDate().before(currentDate)) {
-                if (Objects.equals(requestParam.getValidDateType(), VailDateTypeEnum.PERMANENT.getType()) || requestParam.getValidDate().after(currentDate)) {
-                    stringRedisTemplate.delete(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
-                    evictLocalCache(requestParam.getFullShortUrl());
+                if (Objects.equals(requestParam.getValidDateType(), VailDateTypeEnum.PERMANENT.getType())
+                        || requestParam.getValidDate().after(currentDate)) {
+                    gotoRedisCacheDeleteRetrySupport.deleteOrEnqueue(
+                            String.format(GOTO_IS_NULL_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
                 }
             }
         }
@@ -649,6 +658,12 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         if (!details.contains(domain)) {
             throw new ClientException("演示环境为避免恶意攻击，请生成以下网站跳转链接：" + gotoDomainWhiteListConfiguration.getNames());
         }
+    }
+
+    @EventListener
+    public void onGotoRedisCacheRetrySuccess(GotoRedisCacheRetrySuccessEvent event) {
+        evictLocalCache(event.fullShortUrl());
+        publishLocalCacheEvict(event.fullShortUrl());
     }
 
     private void publishLocalCacheEvict(String fullShortUrl) {

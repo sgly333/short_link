@@ -18,9 +18,11 @@ spring:
         server-addr: 127.0.0.1:8848
 
 short-link:
+# 分组最大数量
   group:
     max-num: 20
   flow-limit:
+  # 是否开启用户流量风控验证
     enable: false
     time-window: 1
     max-access-count: 20
